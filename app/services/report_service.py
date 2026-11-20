@@ -10,6 +10,7 @@ from ..constants import (
     IN_FLIGHT_DISPATCH_STATUSES,
     INCIDENT_STATUSES,
     INCIDENT_TYPES,
+    OPEN_REQUEST_STATUSES,
     REQUEST_CATEGORIES,
     REQUEST_STATUSES,
     RESOURCE_TYPES,
@@ -21,6 +22,7 @@ from ..constants import (
 )
 from ..extensions import db
 from ..models import (
+    ActivityLog,
     DispatchRecord,
     EmergencyRequest,
     Incident,
@@ -82,6 +84,61 @@ def dashboard():
             "requests": _count(EmergencyRequest, EmergencyRequest.status == "Completed"),
             "incidents": _count(Incident, Incident.status.in_(("Completed", "Closed"))),
         },
+        "incident_status": _grouped(Incident.status, INCIDENT_STATUSES),
+        "priority_distribution": _open_priority_distribution(),
+        "recent_incidents": [
+            i.to_dict() for i in db.session.execute(
+                select(Incident).order_by(Incident.created_at.desc(), Incident.id.desc()).limit(5)
+            ).scalars()
+        ],
+        "recent_allocations": [
+            a.to_dict() for a in db.session.execute(
+                select(ResourceAllocation).order_by(ResourceAllocation.created_at.desc(), ResourceAllocation.id.desc())
+                .limit(5)
+            ).scalars()
+        ],
+        "recent_activities": _recent_operational_activity(8),
+    }
+
+
+def _open_priority_distribution():
+    """Open incidents (by severity) and open requests (by priority) combined per level."""
+    incidents = _grouped(Incident.severity, SEVERITIES, Incident.status.in_(ACTIVE_INCIDENT_STATUSES))
+    requests = _grouped(EmergencyRequest.priority, SEVERITIES, EmergencyRequest.status.in_(OPEN_REQUEST_STATUSES))
+    return {level: incidents[level] + requests[level] for level in reversed(SEVERITIES)}
+
+
+def _recent_operational_activity(limit):
+    """Operational feed for every role: no user-account events, IP addresses or raw change details."""
+    rows = db.session.execute(
+        select(ActivityLog)
+        .where(ActivityLog.entity_type != "user")
+        .order_by(ActivityLog.created_at.desc(), ActivityLog.id.desc())
+        .limit(limit)
+    ).scalars()
+    return [
+        {
+            "id": a.id,
+            "action": a.action,
+            "entity_type": a.entity_type,
+            "entity_id": a.entity_id,
+            "description": a.description,
+            "user": a.user.full_name if a.user else "System",
+            "created_at": isoformat(a.created_at),
+        }
+        for a in rows
+    ]
+
+
+def summary():
+    """All situation reports as one consistent snapshot (used by the frontend reports page)."""
+    return {
+        "generated_at": isoformat(utcnow()),
+        "dashboard": dashboard(),
+        "incidents": incident_report(),
+        "resources": resource_report(),
+        "shelters": shelter_report(),
+        "teams": team_report(),
     }
 
 
@@ -143,6 +200,7 @@ def resource_report():
                 "reserved": s.reserved_quantity,
                 "available": s.available_quantity,
                 "dispatched": s.dispatched_quantity,
+                "low_stock_threshold": s.low_stock_threshold,
                 # Share of all stock ever held that has been dispatched or is reserved.
                 "utilization_rate": _pct(s.dispatched_quantity + s.reserved_quantity,
                                          s.quantity + s.dispatched_quantity),

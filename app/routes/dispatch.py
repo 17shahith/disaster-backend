@@ -23,9 +23,11 @@ CREATE_SCHEMA = {
     "origin": Field(str, nullable=True, max_length=255),
     "destination": Field(str, nullable=True, max_length=255),
     "vehicle_details": Field(str, nullable=True, max_length=255),
+    "driver_name": Field(str, nullable=True, max_length=120),
     "notes": Field(str, nullable=True, max_length=2000),
 }
 UPDATE_SCHEMA = {
+    "driver_name": Field(str, nullable=True, max_length=120),
     "status": Field(str, choices=DISPATCH_STATUSES),
     "quantity": Field(int, min_value=1, max_value=100_000_000),
     "team_id": Field(int, nullable=True, min_value=1),

@@ -122,8 +122,10 @@ Fields:
 | `severity` | enum | `Low`, `Medium` (default), `High`, `Critical` |
 | `status` | enum | `Reported` (default), `Active`, `In Progress`, `Completed`, `Closed` |
 | `affected_people` | int | ≥ 0 |
+| `reported_source` | string | optional: who raised the alarm (agency or caller) |
+| `reported_at` | ISO-8601 datetime | optional: when it was reported; defaults to the registration time |
 
-Read-only fields: `id`, `reported_by`, `reporter`, `resolved_at`, `created_at`, `updated_at`.
+Read-only fields: `id`, `reported_by` (the operator who registered it), `reporter`, `resolved_at`, `created_at`, `updated_at`.
 
 Rules:
 
@@ -331,9 +333,12 @@ POST /api/dispatch
   "origin": "Central Warehouse",
   "destination": "Ward 4",     // defaults to the incident (or shelter) location
   "vehicle_details": "Truck TN-01-4521",
+  "driver_name": "R. Kumar",   // optional driver / escort
   "notes": "..."
 }
 ```
+
+`PUT /api/dispatch/<id>` also accepts `driver_name`.
 
 Status workflow (forward only):
 
@@ -348,7 +353,7 @@ Each step records a timestamp: `dispatched_at`, `in_transit_at`, `delivered_at`,
 - The first dispatch moves an `Approved` allocation to `Allocated`.
 - Dispatching a team allocation sets that team to `Busy`.
 - The total dispatched quantity can never exceed the allocated quantity.
-- `quantity` and `team_id` can only be edited while the dispatch is `Prepared`.
+- `quantity` and `team_id` can only be *changed* while the dispatch is `Prepared`. Re-sending the current value (for example from a full edit form) is accepted at any stage.
 - When every unit of a Supply or Shelter allocation has been dispatched and those dispatches are `Completed`, the allocation becomes `Completed` automatically.
 
 ---
@@ -357,7 +362,8 @@ Each step records a timestamp: `dispatched_at`, `in_transit_at`, `delivered_at`,
 
 | Method | Path | Access | Contents |
 |---|---|---|---|
-| GET | `/reports/dashboard` | ALL | Live counts (see below) |
+| GET | `/reports/dashboard` | ALL | Live counts, chart data and recent activity (see below) |
+| GET | `/reports/summary` | ALL | All of the reports below plus the dashboard as one snapshot: `{generated_at, dashboard, incidents, resources, shelters, teams}`. Used by the frontend reports page. |
 | GET | `/reports/incidents` | ALL | Counts by type, severity and status; affected people; request counts by category, status and priority; active critical incidents; 10 most recent incidents |
 | GET | `/reports/resources` | ALL | Per-supply stock and `utilization_rate`; totals by category; low-stock items; allocations by status and type; dispatches by status |
 | GET | `/reports/shelters` | ALL | Capacity, occupancy, free beds and occupancy rate per shelter and in total |
@@ -372,6 +378,12 @@ Each step records a timestamp: `dispatched_at`, `in_transit_at`, `delivered_at`,
 - **Supplies:** `total_available_supplies`, `supply_items`, `low_stock_items`
 - **Operations:** `active_allocations`, `dispatched_resources`, `dispatched_quantity_total`
 - **Completed work:** `completed_operations` (completed allocations, dispatches, requests and incidents)
+- **Charts:** `incident_status` (count per incident status) and `priority_distribution` (open incidents by severity plus open requests by priority, per level)
+- **Recent items:** `recent_incidents` (5), `recent_allocations` (5), and `recent_activities` (8 entries)
+
+`recent_activities` is an operational feed that every role can see. It never includes user-account events, IP addresses or raw change details; the full audit log stays admin-only at `/api/activity-logs`.
+
+Supply rows in `/reports/resources` include `low_stock_threshold`.
 
 ## Health
 

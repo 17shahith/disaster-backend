@@ -23,7 +23,8 @@ def _open_incident(incident_id):
 def create_request(data, actor):
     incident = _open_incident(data["incident_id"])
     with atomic():
-        req = EmergencyRequest(**data, requested_by=actor.id, location=data.get("location") or incident.location)
+        fields = {**data, "location": data.get("location") or incident.location}
+        req = EmergencyRequest(**fields, requested_by=actor.id)
         db.session.add(req)
         db.session.flush()
         log_activity(

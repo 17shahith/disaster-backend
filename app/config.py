@@ -40,7 +40,10 @@ class Config:
     JWT_TOKEN_LOCATION = ["headers"]
     JWT_ERROR_MESSAGE_KEY = "message"
 
-    CORS_ORIGINS = _csv_env("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+    # Vite dev server may be opened as localhost or 127.0.0.1; both are distinct browser origins.
+    CORS_ORIGINS = _csv_env(
+        "CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+    )
 
     PASSWORD_HASH_METHOD = "scrypt"
 

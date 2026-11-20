@@ -2,7 +2,7 @@
 
 A Flask REST API for coordinating emergency response. It covers incidents, emergency requests, response teams, shelters, relief supplies, resource allocation, dispatch operations and situation reports. Access is controlled by JWT authentication and four user roles.
 
-The React frontend is developed separately and talks to this API over REST (CORS is configurable).
+The React frontend lives in its own project (`Disaster Response-frontend`) and talks to this API over REST. See [Running with the React frontend](#running-with-the-react-frontend).
 
 - Full endpoint reference: [docs/API.md](docs/API.md)
 
@@ -161,7 +161,7 @@ curl http://localhost:5000/api/reports/dashboard -H "Authorization: Bearer <acce
 ## Testing
 
 ```bash
-pytest                                   # 169 tests
+pytest                                   # 178 tests
 pytest --cov=app --cov-report=term       # with coverage
 pytest --junitxml=reports/junit.xml      # JUnit report (used by Jenkins)
 ```
@@ -177,6 +177,26 @@ The suite covers:
 - Allocation workflow and transaction rollback.
 - Dispatch lifecycle and inventory deduction.
 - Reports, error format, and the five end-to-end scenarios.
+- The contract the React frontend relies on: CORS for the Vite origin, dashboard and report payloads, and the incident and dispatch fields the UI collects (`tests/test_frontend_contract.py`).
+
+## Running with the React frontend
+
+The two projects stay in separate folders and run independently. The frontend only talks to SQLite through this API.
+
+| | Backend (this folder) | Frontend (`Disaster Response-frontend`) |
+|---|---|---|
+| Install | `pip install -r requirements.txt` | `npm install` |
+| Configure | `.env` (optional for local development) | `.env` with `VITE_API_BASE_URL=http://127.0.0.1:5000/api` |
+| First run | `flask --app run.py db upgrade` and `flask --app run.py seed` | — |
+| Start | `python run.py` → http://127.0.0.1:5000 | `npm run dev` → http://localhost:5173 |
+
+Open http://localhost:5173 and sign in with a seeded account, for example `coordinator@drrc.local` / `Password@123`.
+
+How the two sides fit together:
+
+- **CORS.** The defaults already allow `http://localhost:5173` and `http://127.0.0.1:5173`. Set `CORS_ORIGINS` if the frontend is served from anywhere else.
+- **Authentication.** The frontend stores the access and refresh tokens and sends `Authorization: Bearer <token>`. On a 401 it refreshes once through `POST /api/auth/refresh`; if that fails it sends the user back to the login page. Logout revokes both tokens.
+- **Data shapes.** The frontend translates this API's snake_case fields and integer ids into its own shapes in a single module (`src/services/adapters.js`). The API contract is unchanged.
 
 ## Docker
 
@@ -215,6 +235,6 @@ The [Jenkinsfile](Jenkinsfile) is a declarative pipeline. It needs a Linux agent
 | `DATABASE_URL` | `sqlite:///disaster_response.db` | Relative paths resolve to `instance/` |
 | `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | `60` | Access-token lifetime |
 | `JWT_REFRESH_TOKEN_EXPIRES_DAYS` | `7` | Refresh-token lifetime |
-| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:5173` | Allowed frontend origins |
+| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000` | Allowed frontend origins (the Vite dev server can be opened as either host) |
 | `SEED_DEFAULT_PASSWORD` | `Password@123` | Password for seeded demo users |
 | `SEED_DEMO_DATA` | `false` | Docker: seed data on container start |

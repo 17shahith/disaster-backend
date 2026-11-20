@@ -1,4 +1,6 @@
 """Incident management endpoints."""
+from datetime import datetime
+
 from flask import Blueprint, request
 from flask_jwt_extended import current_user
 from sqlalchemy import or_, select
@@ -26,6 +28,8 @@ INCIDENT_SCHEMA = {
     "severity": Field(str, choices=SEVERITIES, default="Medium"),
     "status": Field(str, choices=ACTIVE_INCIDENT_STATUSES, default="Reported"),
     "affected_people": Field(int, min_value=0, default=0),
+    "reported_source": Field(str, nullable=True, max_length=120),
+    "reported_at": Field(datetime, nullable=True),
 }
 UPDATE_SCHEMA = {**INCIDENT_SCHEMA, "status": Field(str, choices=INCIDENT_STATUSES)}
 

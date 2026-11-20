@@ -17,6 +17,12 @@ def dashboard():
     return success_response(report_service.dashboard(), "Dashboard summary generated successfully")
 
 
+@bp.get("/summary")
+@role_required(*REPORT_VIEWERS)
+def summary():
+    return success_response(report_service.summary(), "Situation summary generated successfully")
+
+
 @bp.get("/incidents")
 @role_required(*REPORT_VIEWERS)
 def incidents():

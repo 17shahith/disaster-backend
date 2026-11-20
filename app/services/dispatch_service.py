@@ -68,6 +68,7 @@ def create_dispatch(data, actor):
                 allocation.shelter.location if allocation.resource_type == "Shelter" else allocation.incident.location
             ),
             vehicle_details=data.get("vehicle_details"),
+            driver_name=data.get("driver_name"),
             notes=data.get("notes"),
             created_by=actor.id,
         )
@@ -137,16 +138,17 @@ def _apply_status(dispatch, new_status, actor):
 def update_dispatch(dispatch, data, actor):
     _check_permissions(dispatch, data, actor)
     for field in PREPARED_ONLY_FIELDS:
-        if field in data and dispatch.status != "Prepared":
+        # Re-sending an unchanged value (e.g. a full edit form) is not a change.
+        if field in data and data[field] != getattr(dispatch, field) and dispatch.status != "Prepared":
             raise ConflictError(f"'{field}' can only be changed while the dispatch is Prepared",
                                 {field: f"Dispatch status is {dispatch.status}."})
     allocation = dispatch.allocation
-    if "quantity" in data:
+    if "quantity" in data and data["quantity"] != dispatch.quantity:
         remaining = allocation.quantity - allocation.dispatched_total + dispatch.quantity
         if data["quantity"] > remaining:
             raise ValidationError("Dispatch quantity exceeds the remaining allocated quantity",
                                   {"quantity": f"Maximum dispatchable quantity is {remaining}."})
-    if "team_id" in data:
+    if "team_id" in data and data["team_id"] != dispatch.team_id:
         _validate_team(data["team_id"], allocation)
 
     new_status = data.pop("status", None)

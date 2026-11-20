@@ -23,6 +23,7 @@ class DispatchRecord(TimestampMixin, db.Model):
     origin = db.Column(db.String(255))
     destination = db.Column(db.String(255), nullable=False)
     vehicle_details = db.Column(db.String(255))
+    driver_name = db.Column(db.String(120))
     notes = db.Column(db.Text)
     dispatched_at = db.Column(db.DateTime)
     in_transit_at = db.Column(db.DateTime)
@@ -50,6 +51,7 @@ class DispatchRecord(TimestampMixin, db.Model):
             "origin": self.origin,
             "destination": self.destination,
             "vehicle_details": self.vehicle_details,
+            "driver_name": self.driver_name,
             "notes": self.notes,
             "dispatched_at": isoformat(self.dispatched_at),
             "in_transit_at": isoformat(self.in_transit_at),

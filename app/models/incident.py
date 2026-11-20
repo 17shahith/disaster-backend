@@ -30,6 +30,9 @@ class Incident(TimestampMixin, db.Model):
     status = db.Column(db.String(20), nullable=False, default="Reported", index=True)
     affected_people = db.Column(db.Integer, nullable=False, default=0)
     reported_by = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"))
+    # Who raised the alarm (agency / caller) and when; distinct from the operator who registered it.
+    reported_source = db.Column(db.String(120))
+    reported_at = db.Column(db.DateTime)
     resolved_at = db.Column(db.DateTime)
 
     reporter = db.relationship("User", foreign_keys=[reported_by])
@@ -55,6 +58,8 @@ class Incident(TimestampMixin, db.Model):
             "affected_people": self.affected_people,
             "reported_by": self.reported_by,
             "reporter": self.reporter.to_summary() if self.reporter else None,
+            "reported_source": self.reported_source,
+            "reported_at": isoformat(self.reported_at or self.created_at),
             "resolved_at": isoformat(self.resolved_at),
             "created_at": isoformat(self.created_at),
             "updated_at": isoformat(self.updated_at),
