@@ -8,11 +8,24 @@ services:
     environment:
       APP_ENV: production
       DATABASE_URL: sqlite:////app/instance/disaster_response.db
+      MONGO_URI: mongodb://mongo:27017/disaster_response
     ports:
       - "${API_PORT:-5000}:5000"
     volumes:
       - drrc_data:/app/instance   # persists the SQLite database across restarts/rebuilds
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  # Document store for saved situation reports. Not published to the host;
+  # only the API container reaches it on the internal compose network.
+  mongo:
+    image: mongo:8.0
+    container_name: drrc-mongo
+    volumes:
+      - drrc_mongo:/data/db       # persists MongoDB data
     restart: unless-stopped
 
 volumes:
   drrc_data:
+  drrc_mongo:

@@ -12,6 +12,7 @@ The React frontend lives in its own project (`Disaster Response-frontend`) and t
 |---|---|
 | Language and framework | Python 3.12, Flask 3 (application factory and blueprints) |
 | Database | SQLite with SQLAlchemy 2; migrations with Flask-Migrate (Alembic) |
+| Document store | MongoDB via PyMongo, for saved situation-report snapshots (optional) |
 | Security | Flask-JWT-Extended (access and refresh tokens, revocation on logout); Werkzeug password hashing (scrypt) |
 | API support | Flask-CORS; python-dotenv for configuration |
 | Testing | Pytest, pytest-cov |
@@ -61,6 +62,15 @@ The database protects its own integrity:
 - CHECK constraints cover every enumerated value, non-negative quantities, `reserved ≤ stock` and `occupancy ≤ capacity`.
 - An allocation must name exactly one resource that matches its type.
 - A partial unique index stops a team from holding two active assignments.
+
+### MongoDB (saved situation reports)
+
+SQLite is the system of record for everything above. MongoDB runs alongside it and stores one thing: **saved situation-report snapshots**, in the `situation_reports` collection of the `disaster_response` database.
+
+- **What a snapshot is.** It freezes the full consolidated report (`GET /api/reports/summary`) at a moment in time, so briefings can be compared later even though the live figures keep changing.
+- **Why MongoDB.** Each snapshot is one large, read-only, nested document with no relational constraints. Keeping it out of SQLite leaves the transactional data model unchanged.
+- **It's optional.** Without `MONGO_URI`, or if the server is down, only the snapshot endpoints return `503`. `GET /api/health` reports `mongodb: ok | unavailable | disabled`.
+- **Auditing.** Saving and deleting a snapshot are still recorded in the SQL `activity_logs` table.
 
 ## Roles
 
@@ -161,7 +171,7 @@ curl http://localhost:5000/api/reports/dashboard -H "Authorization: Bearer <acce
 ## Testing
 
 ```bash
-pytest                                   # 178 tests
+pytest                                   # 188 tests (MongoDB is faked in memory with mongomock)
 pytest --cov=app --cov-report=term       # with coverage
 pytest --junitxml=reports/junit.xml      # JUnit report (used by Jenkins)
 ```
@@ -211,6 +221,7 @@ curl http://localhost:5000/api/health
 - The container runs as a non-root user and applies migrations at startup (`flask db upgrade`).
 - It serves the API with Gunicorn and includes a health check.
 - The SQLite database lives in the named volume `drrc_data`, mounted at `/app/instance`, so data survives restarts and rebuilds.
+- Compose also starts a `mongo` (MongoDB 8.0) container with its data in the `drrc_mongo` volume. It isn't published to the host; only the API container can reach it.
 - In production the app refuses to start with missing or placeholder secrets.
 
 ## Jenkins CI/CD
@@ -238,3 +249,5 @@ The [Jenkinsfile](Jenkinsfile) is a declarative pipeline. It needs a Linux agent
 | `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000` | Allowed frontend origins (the Vite dev server can be opened as either host) |
 | `SEED_DEFAULT_PASSWORD` | `Password@123` | Password for seeded demo users |
 | `SEED_DEMO_DATA` | `false` | Docker: seed data on container start |
+| `MONGO_URI` | development: `mongodb://localhost:27017/disaster_response`; otherwise empty (disabled) | MongoDB for saved situation reports. Docker Compose sets it to its `mongo` service |
+| `MONGO_DB_NAME` | the database name in the URI, else `disaster_response` | Overrides the MongoDB database name |

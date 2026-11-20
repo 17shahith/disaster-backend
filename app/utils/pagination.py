@@ -18,12 +18,18 @@ def _positive_int_arg(name, default):
     return value
 
 
-def paginate(statement, serializer=lambda obj: obj.to_dict()):
+def page_args():
+    """Validated ``(page, per_page)`` from the query string."""
     page = _positive_int_arg("page", 1)
     per_page = min(
         _positive_int_arg("per_page", current_app.config["DEFAULT_PAGE_SIZE"]),
         current_app.config["MAX_PAGE_SIZE"],
     )
+    return page, per_page
+
+
+def paginate(statement, serializer=lambda obj: obj.to_dict()):
+    page, per_page = page_args()
     result = db.paginate(statement, page=page, per_page=per_page, error_out=False)
     return {
         "items": [serializer(item) for item in result.items],

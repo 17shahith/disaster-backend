@@ -44,6 +44,10 @@ def create_app(config_name=None, config_overrides=None):
     )
 
     from . import models  # noqa: F401  (register models with SQLAlchemy metadata)
+    from .mongo import init_mongo, mongo_status
+
+    init_mongo(app)
+
     from .cli import register_cli
     from .middleware.auth import register_jwt_callbacks
     from .middleware.error_handlers import register_error_handlers
@@ -56,6 +60,7 @@ def create_app(config_name=None, config_overrides=None):
 
     @app.get("/api/health")
     def health():
-        return success_response({"status": "ok"}, "Service is healthy")
+        # The API is healthy without MongoDB; its state is reported for monitoring.
+        return success_response({"status": "ok", "mongodb": mongo_status()}, "Service is healthy")
 
     return app

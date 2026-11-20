@@ -385,9 +385,22 @@ Each step records a timestamp: `dispatched_at`, `in_transit_at`, `delivered_at`,
 
 Supply rows in `/reports/resources` include `low_stock_threshold`.
 
+### Saved situation reports (MongoDB)
+
+A snapshot freezes `/reports/summary` at the moment it is saved. Snapshots are stored in MongoDB; if MongoDB is not configured or not reachable, these endpoints return `503` and the rest of the API keeps working.
+
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| POST | `/reports/snapshots` | OP, RC | Body: `{ "title": "08:00 briefing", "notes": "..." }`. `title` 3-150 chars; `notes` optional |
+| GET | `/reports/snapshots` | ALL | Newest first, paginated (`page`, `per_page`). Items carry `id`, `title`, `notes`, `created_at`, `created_by`, `generated_at` and `highlights` (headline counts), but not the full report |
+| GET | `/reports/snapshots/<id>` | ALL | The same fields plus `data`, which has exactly the shape of `/reports/summary` |
+| DELETE | `/reports/snapshots/<id>` | admin | Permanently removes the snapshot |
+
+`id` is a MongoDB ObjectId string. An unknown or malformed id returns `404`. Saving and deleting are recorded in the activity log as `SITUATION_REPORT_SAVED` and `SITUATION_REPORT_DELETED`.
+
 ## Health
 
-`GET /api/health` is public and returns `{"success": true, "data": {"status": "ok"}}`.
+`GET /api/health` is public and returns `{"success": true, "data": {"status": "ok", "mongodb": "ok"}}`. `mongodb` is `ok`, `unavailable` or `disabled`. The API counts as healthy without MongoDB.
 
 ## Activity log actions
 

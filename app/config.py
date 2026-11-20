@@ -35,6 +35,11 @@ class Config:
     # Wait for SQLite write locks instead of failing immediately under concurrent requests.
     SQLALCHEMY_ENGINE_OPTIONS = {"connect_args": {"timeout": 15}}
 
+    # Optional MongoDB document store (situation-report snapshots). Empty = disabled.
+    MONGO_URI = os.getenv("MONGO_URI", "")
+    MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "")
+    MONGO_TIMEOUT_MS = _int_env("MONGO_TIMEOUT_MS", 3000)
+
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=_int_env("JWT_ACCESS_TOKEN_EXPIRES_MINUTES", 60))
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=_int_env("JWT_REFRESH_TOKEN_EXPIRES_DAYS", 7))
     JWT_TOKEN_LOCATION = ["headers"]
@@ -60,6 +65,7 @@ class Config:
 
 class DevelopmentConfig(Config):
     DEBUG = True
+    MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/disaster_response")
 
 
 class TestingConfig(Config):
@@ -71,6 +77,8 @@ class TestingConfig(Config):
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
     # Cheaper hashing keeps the suite fast; production uses Werkzeug's scrypt default.
     PASSWORD_HASH_METHOD = "pbkdf2:sha256:1000"
+    # In-memory MongoDB fake: tests never touch a real server.
+    MONGO_URI = "mongomock://localhost/drrc_test"
 
 
 class ProductionConfig(Config):
