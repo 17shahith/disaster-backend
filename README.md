@@ -108,9 +108,19 @@ pip install -r requirements-dev.txt
 
 **2. Create your configuration file.**
 
+Copy the example into a file named `.env` in this folder (next to `run.py`):
+
 ```bash
-cp .env.example .env        # then edit secrets
+cp .env.example .env                 # Windows PowerShell: Copy-Item .env.example .env
 ```
+
+Then edit `.env`:
+
+- Replace the two `change-me` values for `SECRET_KEY` and `JWT_SECRET_KEY` with random strings. To generate one:
+  `python -c "import secrets; print(secrets.token_hex(32))"`
+- Set `MONGO_URI` to your MongoDB server (see [Setting up MongoDB](#setting-up-mongodb)). Leave it as it is to use a local MongoDB.
+
+`.env` is git-ignored; never commit it. It is read only at start-up, so restart the API after changing it.
 
 **3. Create the database schema and load demo data.**
 
@@ -127,14 +137,14 @@ python run.py               # http://127.0.0.1:5000
 
 ### Demo accounts (created by `flask seed`)
 
-All demo accounts use the password from `SEED_DEFAULT_PASSWORD` (default `Password@123`).
+All demo accounts use the password from `SEED_DEFAULT_PASSWORD` (default `Password@123`). You can sign in with either the username or the email.
 
-| Username | Role |
-|---|---|
-| `admin` | Administrator |
-| `operator` | Control Room Operator |
-| `teamlead`, `teamlead2` | Response Team Lead |
-| `coordinator` | Relief Coordinator |
+| Username | Email | Role |
+|---|---|---|
+| `admin` | `admin@drrc.local` | Administrator |
+| `operator` | `operator@drrc.local` | Control Room Operator |
+| `teamlead`, `teamlead2` | `teamlead@drrc.local`, `teamlead2@drrc.local` | Response Team Lead |
+| `coordinator` | `coordinator@drrc.local` | Relief Coordinator |
 
 Change these passwords, or skip seeding, for any real deployment.
 
@@ -154,6 +164,28 @@ Change these passwords, or skip seeding, for any real deployment.
 curl -X POST http://localhost:5000/api/auth/login -H "Content-Type: application/json" \
      -d '{"username":"coordinator","password":"Password@123"}'
 curl http://localhost:5000/api/reports/dashboard -H "Authorization: Bearer <access_token>"
+```
+
+## Setting up MongoDB
+
+MongoDB is only needed for saved situation reports; everything else runs on SQLite. The connection is set with **`MONGO_URI` in `.env`**. The database name is the last part of the URL.
+
+| Where MongoDB runs | `MONGO_URI` value |
+|---|---|
+| On this computer (the default in development) | `mongodb://localhost:27017/disaster_response` |
+| MongoDB Atlas (cloud) | `mongodb+srv://<user>:<password>@<cluster>.mongodb.net/disaster_response?retryWrites=true&w=majority` |
+| Docker Compose | Set automatically to `mongodb://mongo:27017/disaster_response` by `docker-compose.yml`; the `.env` value is ignored |
+| Turned off | `MONGO_URI=` (empty); snapshot endpoints then return `503` |
+
+To use a local server, install MongoDB Community Server and make sure the MongoDB service is running. For Atlas, add your IP address to the cluster's network access list, and URL-encode any special characters in the password (for example `@` becomes `%40`).
+
+Check the connection after restarting the API:
+
+```bash
+curl http://127.0.0.1:5000/api/health
+# "mongodb": "ok"           connected
+# "mongodb": "unavailable"  MONGO_URI is set but the server can't be reached
+# "mongodb": "disabled"     MONGO_URI is empty
 ```
 
 ## Simulated emergency scenarios
@@ -224,6 +256,20 @@ curl http://localhost:5000/api/health
 - Compose also starts a `mongo` (MongoDB 8.0) container with its data in the `drrc_mongo` volume. It isn't published to the host; only the API container can reach it.
 - In production the app refuses to start with missing or placeholder secrets.
 
+### Backups
+
+All data lives in two places: the SQLite file and the MongoDB snapshots.
+
+- **Local development:** stop the API, then copy `instance/disaster_response.db`. Back up MongoDB with `mongodump --uri "mongodb://localhost:27017/disaster_response" --out backup/`.
+- **Docker:** copy the database out of the running container, and dump MongoDB from its container:
+
+```bash
+docker compose cp api:/app/instance/disaster_response.db ./backup/disaster_response.db
+docker compose exec mongo mongodump --db disaster_response --archive > ./backup/mongo.archive
+```
+
+To restore, put the `.db` file back while the API is stopped, and run `mongorestore --archive < mongo.archive` (in the container: `docker compose exec -T mongo mongorestore --archive < ./backup/mongo.archive`).
+
 ## Jenkins CI/CD
 
 The [Jenkinsfile](Jenkinsfile) is a declarative pipeline. It needs a Linux agent with Python 3.12, Docker and the JUnit plugin.
@@ -251,3 +297,17 @@ The [Jenkinsfile](Jenkinsfile) is a declarative pipeline. It needs a Linux agent
 | `SEED_DEMO_DATA` | `false` | Docker: seed data on container start |
 | `MONGO_URI` | development: `mongodb://localhost:27017/disaster_response`; otherwise empty (disabled) | MongoDB for saved situation reports. Docker Compose sets it to its `mongo` service |
 | `MONGO_DB_NAME` | the database name in the URI, else `disaster_response` | Overrides the MongoDB database name |
+| `MONGO_TIMEOUT_MS` | `3000` | How long to wait for MongoDB before answering `503` |
+| `HOST`, `PORT` | `127.0.0.1`, `5000` | Address used by `python run.py` (use `HOST=0.0.0.0` to allow other devices on your network) |
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `RuntimeError: Production requires strong secrets` | Set `SECRET_KEY` and `JWT_SECRET_KEY` to 32+ random characters, or use `APP_ENV=development` locally |
+| `no such table: users` | Run `flask --app run.py db upgrade` |
+| Login fails for the demo accounts | Run `flask --app run.py seed`, or check `SEED_DEFAULT_PASSWORD` |
+| Snapshots return `503` | MongoDB isn't running or `MONGO_URI` is wrong; check `GET /api/health` |
+| Browser shows a CORS error | Add the frontend's exact origin (scheme, host and port) to `CORS_ORIGINS` and restart |
+| Everyone was logged out | `JWT_SECRET_KEY` changed, so old tokens are no longer valid; sign in again |
+| Port 5000 is already in use | Stop the other process, or start with `PORT=5001` and update the frontend's `VITE_API_BASE_URL` |
